@@ -82,7 +82,7 @@ namespace EmpyrionGalaxyNavigator
             var remainingResources = P.bpResourcesInFactory.ToDictionary(r => r.Key, r => (1.0 - ExtractionPercentLoss(r.Key)) * r.Value);
 
             var answer = await ShowDialog(playerId, P, "Extract ressources from factory", $"Do you want to extract your ressources?" + 
-                remainingResources.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)r.Value}[-][/c] of [c][00ff00]{GetItemName(r.Key)}[-][/c] loss [c][f0ff00]{ExtractionPercentLoss(r.Key):P1}[-][/c]\n"), 
+                remainingResources.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)r.Value}[-][/c] of [c][00ff00]{GetItemName(r.Key)}[-][/c] loss [c][ff0000]{(int)(r.Value * ExtractionPercentLoss(r.Key))}[-][/c] = [c][ff0000]{ExtractionPercentLoss(r.Key):P1}[-][/c]\n"), 
                 "Yes", "No");
             if (answer.Id != P.entityId || answer.Value != 0) return;
 
@@ -92,8 +92,11 @@ namespace EmpyrionGalaxyNavigator
 
         private string GetItemName(int itemId)
         {
+            var foundName = Configuration.Current.Ressources?.FirstOrDefault(r => r.Item == itemId)?.Name;
+            if(!string.IsNullOrEmpty(foundName)) return foundName;
+
             var foundId = BlockNameIdMapping?.FirstOrDefault(i => i.Value == itemId);
-            return foundId?.Value == 0 ? itemId.ToString() : foundId?.Key;
+            return string.IsNullOrEmpty(foundId?.Key) ? itemId.ToString() : foundId?.Key;
         }
 
         private double ExtractionPercentLoss(int itemId)
@@ -193,6 +196,16 @@ namespace EmpyrionGalaxyNavigator
         {
             ConfigurationManager<Configuration>.Log = Log;
             Configuration = new ConfigurationManager<Configuration>() { ConfigFilename = Path.Combine(EmpyrionConfiguration.SaveGameModPath, "Configuration.json") };
+            Configuration.CreateDefaults = config => {
+                config.Ressources = new List<RessourcesData>(new[] { new RessourcesData
+                    {
+                        Item                    = 4320,
+                        Name                    = "Iron",
+                        RebuyCostPerUnit        = 5,
+                        ExtractionPercentLost   = 0.3
+                    }
+                });
+            };
 
             Configuration.Load();
             Configuration.Save();
