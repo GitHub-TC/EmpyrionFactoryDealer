@@ -23,7 +23,7 @@ Resourcen.
 * LogLevel: Steuerung des Loggings
 * ChatCommandPrefix: Zeichenfolge mit dem die Chatkommandos beginnen müssen
 * NameIdMappingFile: Für eine Namensauflösung der Ressourcen der Pfad zu der NameIdMapping.json z.B. aus dem EmpyrionScripting
-* CostsPerRemainingTime: Credits pro Zeiteinheit
+* CostsPerRemainingMinute: Credits pro Minute
 * RebuyCostPerUnit: Allgemeine Angabe der Credits pro Ressourceeneinheit
 * ExtractionPercentLost: Allgemeine Verlustquote pro Ressourceeneinheit
 * Ressources: Liste mit speziellen Werten pro Ressource
@@ -62,7 +62,7 @@ resources.
 * LogLevel: control the logging
 * ChatCommandPrefix: string the chat commands must start with
 * NameIdMappingFile: For a name resolution of the resources the path to the NameIdMapping.json e.g. from EmpyrionScripting.
-* CostsPerRemainingTime: Credits per time unit
+* CostsPerRemainingMinute: Credits per minute
 * RebuyCostPerUnit: General specification of the credits per resource unit
 * ExtractionPercentLost: General loss rate per resource unit
 * Resources: List with special values per resource

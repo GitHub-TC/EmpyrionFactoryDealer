@@ -71,7 +71,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Configuration.cs" />
-    <Compile Include="Map.cs" />
     <Compile Include="FactoryDealer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
