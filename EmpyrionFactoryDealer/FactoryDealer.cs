@@ -67,7 +67,7 @@ namespace EmpyrionGalaxyNavigator
         private async Task ExtractAllRessources(int playerId)
         {
             var P = await Request_Player_Info(playerId.ToId());
-            if (P.bpResourcesInFactory?.Any() == false)
+            if (P.bpResourcesInFactory == null || P.bpResourcesInFactory.Count == 0)
             {
                 InformPlayer(playerId, $"You have no ressources in the factory.");
                 return;
@@ -79,15 +79,32 @@ namespace EmpyrionGalaxyNavigator
                 return;
             }
 
-            var remainingResources = P.bpResourcesInFactory.ToDictionary(r => r.Key, r => (1.0 - ExtractionPercentLoss(r.Key)) * r.Value);
-
-            var answer = await ShowDialog(playerId, P, "Extract ressources from factory", $"Do you want to extract your ressources?" + 
-                remainingResources.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)r.Value}[-][/c] of [c][00ff00]{GetItemName(r.Key)}[-][/c] loss [c][ff0000]{(int)(r.Value * ExtractionPercentLoss(r.Key))}[-][/c] = [c][ff0000]{ExtractionPercentLoss(r.Key):P1}[-][/c]\n"), 
+            var answer = await ShowDialog(playerId, P, "Extract ressources from factory", $"Do you want to extract your ressources?" +
+                P.bpResourcesInFactory.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)(r.Value * (1.0 - ExtractionPercentLoss(r.Key)))}[-][/c] of [c][00ff00]{GetItemName(r.Key)}[-][/c] loss [c][ff0000]{(int)(r.Value * ExtractionPercentLoss(r.Key))}[-][/c] = [c][ff0000]{ExtractionPercentLoss(r.Key):P1}[-][/c]\n"), 
                 "Yes", "No");
             if (answer.Id != P.entityId || answer.Value != 0) return;
 
-            await Task.WhenAll(remainingResources.Select(res => Request_Player_AddItem(new IdItemStack { id = playerId, itemStack = new ItemStack { id = res.Key, count = (int)res.Value } })));
-            await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = new List<ItemStack>(), ReplaceExisting = true });
+            var remainingItemStacks = new List<ItemStack>();
+            foreach (var res in P.bpResourcesInFactory)
+            {
+                try
+                {
+                    await Request_Player_AddItem(new IdItemStack { id = playerId, itemStack = new ItemStack { id = res.Key, count = (int)(res.Value * (1.0 - ExtractionPercentLoss(res.Key)))} });
+                }
+                catch
+                {
+                    remainingItemStacks.Add(new ItemStack() { id = res.Key, count= (int)res.Value });
+                }
+            }
+
+            await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
+
+            if(remainingItemStacks.Count > 0)
+            {
+                await ShowDialog(playerId, P, "Extract ressources from factory", $"Not enough free spaces in the inventory\nResources remaining in the factory:\n" +
+                    remainingItemStacks.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)r.count}[-][/c] of [c][00ff00]{GetItemName(r.id)}[-][/c]\n"),
+                    "Ok", null);
+            }
         }
 
         private string GetItemName(int itemId)
@@ -105,7 +122,7 @@ namespace EmpyrionGalaxyNavigator
         private async Task RebuyAllRessources(int playerId)
         {
             var P = await Request_Player_Info(playerId.ToId());
-            if (P.bpResourcesInFactory?.Any() == false)
+            if (P.bpResourcesInFactory == null || P.bpResourcesInFactory.Count == 0)
             {
                 InformPlayer(playerId, $"You have no ressources in the factory.");
                 return;
@@ -127,9 +144,31 @@ namespace EmpyrionGalaxyNavigator
             var answer = await ShowDialog(playerId, P, "Rebuy ressources from factory", $"Do you want to rebuy your ressources for [c][00ff00]{costs}[-][/c] credits?", "Yes", "No");
             if (answer.Id != P.entityId || answer.Value != 0) return;
 
-            await Task.WhenAll(P.bpResourcesInFactory.Select(res => Request_Player_AddItem(new IdItemStack { id = playerId, itemStack = new ItemStack { id = res.Key, count = (int)res.Value } })));
-            await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = new List<ItemStack>(), ReplaceExisting = true });
+            costs = 0;
+            var remainingItemStacks = new List<ItemStack>();
+            foreach (var res in P.bpResourcesInFactory)
+            {
+                try
+                {
+                    await Request_Player_AddItem(new IdItemStack { id = playerId, itemStack = new ItemStack { id = res.Key, count = (int)res.Value } });
+                    costs += res.Value * (Configuration.Current.Ressources.FirstOrDefault(r => r.Item == res.Key)?.RebuyCostPerUnit ?? Configuration.Current.RebuyCostPerUnit);
+                }
+                catch
+                {
+                    remainingItemStacks.Add(new ItemStack() { id = res.Key, count = (int)res.Value });
+                }
+            }
+
+            await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
             await Request_Player_AddCredits  (new IdCredits { id = playerId, credits = -costs });
+
+            if (remainingItemStacks.Count > 0)
+            {
+                await ShowDialog(playerId, P, "Extract ressources from factory", $"Not enough free spaces in the inventory\n" +
+                    $"you only have to pay [c][f0ff00]{costs}[-][/c] credits\nResources remaining in the factory:\n" +
+                    remainingItemStacks.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)r.count}[-][/c] of [c][00ff00]{GetItemName(r.id)}[-][/c] loss [c][ff0000]{(int)(r.count * ExtractionPercentLoss(r.id))}[-][/c] = [c][ff0000]{ExtractionPercentLoss(r.id):P1}[-][/c]\n"),
+                    "Ok", null);
+            }
         }
 
         private async Task FinishedFactory(int playerId)
