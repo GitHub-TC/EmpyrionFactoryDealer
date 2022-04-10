@@ -104,8 +104,12 @@ namespace EmpyrionGalaxyNavigator
                         {
                             remainingItemStacks = remainingItemStacks.Select(r => new ItemStack() { id = r.id, count = (int)(r.count / (1.0 - ExtractionPercentLoss(r.id))) }).ToList();
 
+                            if (remainingItemStacks.Count > 0) Log($"***CloseFactoryXChange remaining in factory for player:{P.playerName}[{P.entityId}/{P.steamId}] with used slots:{remainingItemStacks.Count} items:{JsonConvert.SerializeObject(remainingItemStacks)}");
+
                             await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
-                            await ShowDialog(playerId, P, "Extract ressources from factory", RemainingInFactoryMessage(remainingItemStacks), "Ok", null);
+                            await ShowDialog(playerId, P, "Extract ressources from factory", RemainingInFactoryMessage(remainingItemStacks));
+
+                            Log($"***EndFactoryDealer for player:{P.playerName}[{P.entityId}/{P.steamId}]");
                         }
                 );
             }
@@ -173,10 +177,13 @@ namespace EmpyrionGalaxyNavigator
                         {
                             costs = extractedStacks.Aggregate(0, (c, res) => c + res.count * (Configuration.Current.Ressources.FirstOrDefault(r => r.Item == res.id)?.RebuyCostPerUnit ?? Configuration.Current.RebuyCostPerUnit));
 
+                            if (remainingItemStacks.Count > 0) Log($"***CloseFactoryXChange remaining in factory for player:{P.playerName}[{P.entityId}/{P.steamId}] with used slots:{remainingItemStacks.Count} items:{JsonConvert.SerializeObject(remainingItemStacks)}", LogLevel.Message);
+
                             await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
                             await Request_Player_AddCredits(new IdCredits { id = playerId, credits = -costs });
 
-                            await ShowDialog(playerId, P, "Extract ressources from factory", $"You have to pay [c][f0ff00]{costs}[-][/c] credits\n{RemainingInFactoryMessage(remainingItemStacks)}", "Ok", null);
+                            await ShowDialog(playerId, P, "Extract ressources from factory", $"You have to pay [c][f0ff00]{costs}[-][/c] credits\n{RemainingInFactoryMessage(remainingItemStacks)}");
+                            Log($"***EndFactoryDealer for player:{P.playerName}[{P.entityId}/{P.steamId}]");
                         }
                 );
             }
