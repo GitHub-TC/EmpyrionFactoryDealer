@@ -7,6 +7,8 @@
 Ermöglicht zusätzliche Funktine für die Fabrik. Das sofortige Fertigstellen des Blueprints gegen Credits oder die Herausgabe der gespeicherten
 Resourcen.
 
+https://youtu.be/bvQRbU3YCLU
+
 ![](Screenshots/Help.png)
 ![](Screenshots/Finish.png)
 ![](Screenshots/GetAll.png)
@@ -46,6 +48,8 @@ English-Version:
 ## What is this for?
 Allows additional functine for the factory. The immediate completion of the blueprint in exchange for credits or the release of the stored
 resources.
+
+https://youtu.be/bvQRbU3YCLU
 
 ![](Screenshots/Help.png)
 ![](Screenshots/Finish.png)
