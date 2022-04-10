@@ -22,6 +22,7 @@ namespace EmpyrionGalaxyNavigator
         [JsonConverter(typeof(StringEnumConverter))]
         public LogLevel LogLevel { get; set; } = LogLevel.Message;
         public string ChatCommandPrefix { get; set; } = "/\\";
+        public bool UsePlayerAddItemForTransfer { get; set; }
         public int CostsPerRemainingMinute { get; set; } = 10000;
         public int RebuyCostPerUnit { get; set; } = 10;
         public double ExtractionPercentLost { get; set; } = 0.2;

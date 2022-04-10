@@ -84,36 +84,31 @@ namespace EmpyrionGalaxyNavigator
                 "Yes", "No");
             if (answer.Id != P.entityId || answer.Value != 0) return;
 
-            var remainingItemStacks = new List<ItemStack>();
-            foreach (var res in P.bpResourcesInFactory)
+            if (Configuration.Current.UsePlayerAddItemForTransfer)
             {
-                try
+                var remainingItemStacks = new List<ItemStack>();
+                foreach (var res in P.bpResourcesInFactory)
                 {
-                    await Request_Player_AddItem(new IdItemStack { id = playerId, itemStack = new ItemStack { id = res.Key, count = (int)(res.Value * (1.0 - ExtractionPercentLoss(res.Key)))} });
+                    try  { await Request_Player_AddItem(new IdItemStack { id = playerId, itemStack = new ItemStack { id = res.Key, count = (int)(res.Value * (1.0 - ExtractionPercentLoss(res.Key))) } }); }
+                    catch{ remainingItemStacks.Add(new ItemStack() { id = res.Key, count = (int)res.Value }); }
                 }
-                catch
-                {
-                    remainingItemStacks.Add(new ItemStack() { id = res.Key, count= (int)res.Value });
-                }
+
+                await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
+
+                if (remainingItemStacks.Count > 0) await ShowDialog(playerId, P, "Extract ressources from factory", $"Not enough free spaces in the inventory\n{RemainingInFactoryMessage(remainingItemStacks)}", "Ok", null);
             }
-
-            await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
-
-            if(remainingItemStacks.Count > 0)
+            else
             {
-                await ShowDialog(playerId, P, "Extract ressources from factory", $"Not enough free spaces in the inventory\nResources remaining in the factory:\n" +
-                    remainingItemStacks.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)r.count}[-][/c] of [c][00ff00]{GetItemName(r.id)}[-][/c]\n"),
-                    "Ok", null);
+                await RessourcesXChange(P, P.bpResourcesInFactory.Select(r => new ItemStack() { id = r.Key, count = (int)(r.Value * (1.0 - ExtractionPercentLoss(r.Key))) }).ToList(),
+                    async (extractedStacks, remainingItemStacks) =>
+                        {
+                            remainingItemStacks = remainingItemStacks.Select(r => new ItemStack() { id = r.id, count = (int)(r.count / (1.0 - ExtractionPercentLoss(r.id))) }).ToList();
+
+                            await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
+                            await ShowDialog(playerId, P, "Extract ressources from factory", RemainingInFactoryMessage(remainingItemStacks), "Ok", null);
+                        }
+                );
             }
-        }
-
-        private string GetItemName(int itemId)
-        {
-            var foundName = Configuration.Current.Ressources?.FirstOrDefault(r => r.Item == itemId)?.Name;
-            if(!string.IsNullOrEmpty(foundName)) return foundName;
-
-            var foundId = BlockNameIdMapping?.FirstOrDefault(i => i.Value == itemId);
-            return string.IsNullOrEmpty(foundId?.Key) ? itemId.ToString() : foundId?.Key;
         }
 
         private double ExtractionPercentLoss(int itemId)
@@ -144,32 +139,160 @@ namespace EmpyrionGalaxyNavigator
             var answer = await ShowDialog(playerId, P, "Rebuy ressources from factory", $"Do you want to rebuy your ressources for [c][00ff00]{costs}[-][/c] credits?", "Yes", "No");
             if (answer.Id != P.entityId || answer.Value != 0) return;
 
-            costs = 0;
-            var remainingItemStacks = new List<ItemStack>();
-            foreach (var res in P.bpResourcesInFactory)
+            if (Configuration.Current.UsePlayerAddItemForTransfer)
             {
-                try
+                costs = 0;
+                var remainingItemStacks = new List<ItemStack>();
+                foreach (var res in P.bpResourcesInFactory)
                 {
-                    await Request_Player_AddItem(new IdItemStack { id = playerId, itemStack = new ItemStack { id = res.Key, count = (int)res.Value } });
-                    costs += res.Value * (Configuration.Current.Ressources.FirstOrDefault(r => r.Item == res.Key)?.RebuyCostPerUnit ?? Configuration.Current.RebuyCostPerUnit);
+                    try
+                    {
+                        await Request_Player_AddItem(new IdItemStack { id = playerId, itemStack = new ItemStack { id = res.Key, count = (int)res.Value } });
+                        costs += res.Value * (Configuration.Current.Ressources.FirstOrDefault(r => r.Item == res.Key)?.RebuyCostPerUnit ?? Configuration.Current.RebuyCostPerUnit);
+                    }
+                    catch
+                    {
+                        remainingItemStacks.Add(new ItemStack() { id = res.Key, count = (int)res.Value });
+                    }
                 }
-                catch
+
+                await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
+                await Request_Player_AddCredits(new IdCredits { id = playerId, credits = -costs });
+
+                if (remainingItemStacks.Count > 0)
                 {
-                    remainingItemStacks.Add(new ItemStack() { id = res.Key, count = (int)res.Value });
+                    await ShowDialog(playerId, P, "Extract ressources from factory", $"Not enough free spaces in the inventory\n" +
+                        $"you only have to pay [c][f0ff00]{costs}[-][/c] credits\n{RemainingInFactoryMessage(remainingItemStacks)}", "Ok", null);
                 }
             }
-
-            await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
-            await Request_Player_AddCredits  (new IdCredits { id = playerId, credits = -costs });
-
-            if (remainingItemStacks.Count > 0)
+            else
             {
-                await ShowDialog(playerId, P, "Extract ressources from factory", $"Not enough free spaces in the inventory\n" +
-                    $"you only have to pay [c][f0ff00]{costs}[-][/c] credits\nResources remaining in the factory:\n" +
-                    remainingItemStacks.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)r.count}[-][/c] of [c][00ff00]{GetItemName(r.id)}[-][/c] loss [c][ff0000]{(int)(r.count * ExtractionPercentLoss(r.id))}[-][/c] = [c][ff0000]{ExtractionPercentLoss(r.id):P1}[-][/c]\n"),
-                    "Ok", null);
+                await RessourcesXChange(P,
+                    P.bpResourcesInFactory.Select(r => new ItemStack() { id = r.Key, count = (int)r.Value }).ToList(),
+                    async (extractedStacks, remainingItemStacks) =>
+                        {
+                            costs = extractedStacks.Aggregate(0, (c, res) => c + res.count * (Configuration.Current.Ressources.FirstOrDefault(r => r.Item == res.id)?.RebuyCostPerUnit ?? Configuration.Current.RebuyCostPerUnit));
+
+                            await Request_Blueprint_Resources(new BlueprintResources { PlayerId = playerId, ItemStacks = remainingItemStacks, ReplaceExisting = true });
+                            await Request_Player_AddCredits(new IdCredits { id = playerId, credits = -costs });
+
+                            await ShowDialog(playerId, P, "Extract ressources from factory", $"You have to pay [c][f0ff00]{costs}[-][/c] credits\n{RemainingInFactoryMessage(remainingItemStacks)}", "Ok", null);
+                        }
+                );
             }
         }
+
+        private async Task RessourcesXChange(PlayerInfo P, List<ItemStack> itemStacks, Func<List<ItemStack>, List<ItemStack>, Task> transferComplete)
+        {
+            var itemStacksCount = itemStacks.Count;
+            Log($"***OpendFactoryXChange player:{P.playerName}[{P.entityId}/{P.steamId}] with used slots:{itemStacksCount}");
+
+            Action<ItemExchangeInfo> eventCallback = null;
+            bool? isBackpackOpenOkResult = null;
+            eventCallback = new Action<ItemExchangeInfo>(B =>
+            {
+                if (P.entityId != B.id || !isBackpackOpenOkResult.HasValue) return;
+
+                if (isBackpackOpenOkResult.Value)
+                {
+                    isBackpackOpenOkResult = false;
+                    return;
+                }
+
+                if (ItemStacksOk(itemStacks, B.items, out var errorMsg))
+                {
+                    Log($"***CloseFactoryXChange Player:{P.playerName}[{P.entityId}/{P.steamId}] with used slots:{itemStacksCount}->{B.items?.Length ?? 0}");
+                    if (itemStacksCount > 0 && (B.items?.Length ?? 0) == 0) Log($"***CloseFactoryXChange POSSIBLE ITEMS LOSS for player:{P.playerName}[{P.entityId}/{P.steamId}] with used slots:{itemStacksCount}->{B.items?.Length ?? 0} items:{JsonConvert.SerializeObject(itemStacks)}", LogLevel.Error);
+
+                    Event_Player_ItemExchange -= eventCallback;
+
+                    var remainingItemStacks = StackItems(B.items);
+                    transferComplete(itemStacks.Select(stack => new ItemStack { id = stack.id, count = stack.count - remainingItemStacks.FirstOrDefault(i => i.id == stack.id).count }).ToList(), remainingItemStacks).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    Log($"***ReopendFactoryXChange Player:{P.playerName}[{P.entityId}/{P.steamId}] Slots:{B.items?.Length}");
+
+                    isBackpackOpenOkResult = true;
+                    OpenBackpackItemExcange(P.entityId, $"{errorMsg}", B.items).GetAwaiter().GetResult();
+                }
+            });
+
+            Event_Player_ItemExchange += eventCallback;
+            isBackpackOpenOkResult = true;
+
+            await OpenBackpackItemExcange(P.entityId, "", itemStacks.ToArray());
+        }
+
+        private bool ItemStacksOk(IList<ItemStack> itemStacks, ItemStack[] items, out string errorMsg)
+        {
+            errorMsg = "";
+            var testStacks = StackItems(items);
+
+            foreach (var item in testStacks)
+            {
+                var stack = itemStacks.FirstOrDefault(i => i.id == item.id);
+                if      (stack.id == 0)            errorMsg += $"{GetItemName(item.id)} not allowed\n";
+                else if (stack.count < item.count) errorMsg += $"{GetItemName(item.id)} more items than {stack.count}\n";
+            }
+
+            return string.IsNullOrEmpty(errorMsg);
+        }
+
+        private static List<ItemStack> StackItems(ItemStack[] items)
+        {
+            if(items == null) return new List<ItemStack>();
+
+            var itemsStacks = new List<ItemStack>();
+            foreach (var item in items)
+            {
+                var stack = itemsStacks.FirstOrDefault(i => i.id == item.id);
+                stack.count += item.count;
+
+                if (stack.id == 0)
+                {
+                    stack.id = item.id;
+                    itemsStacks.Add(stack);
+                }
+            }
+
+            return itemsStacks;
+        }
+
+        private string RemainingInFactoryMessage(List<ItemStack> remainingItemStacks)
+            => remainingItemStacks.Count == 0
+                ? "Factory is empty"
+                : $"Resources remaining in the factory:\n{remainingItemStacks.Aggregate("\n", (l, r) => l + $"[c][f0ff00]{(int)r.count}[-][/c] of [c][00ff00]{GetItemName(r.id)}[-][/c]\n")}";
+
+        private string GetItemName(int itemId)
+        {
+            var foundName = Configuration.Current.Ressources?.FirstOrDefault(r => r.Item == itemId)?.Name;
+            if (!string.IsNullOrEmpty(foundName)) return foundName;
+
+            var foundId = BlockNameIdMapping?.FirstOrDefault(i => i.Value == itemId);
+            return string.IsNullOrEmpty(foundId?.Key) ? itemId.ToString() : foundId?.Key;
+        }
+
+        private async Task OpenBackpackItemExcange(int playerId, string description, ItemStack[] items)
+        {
+            var exchange = new ItemExchangeInfo()
+            {
+                buttonText = "close",
+                desc       = description,
+                id         = playerId,
+                items      = items ?? new ItemStack[] { },
+                title      = "Factory ressources"
+            };
+
+            try { await Request_Player_ItemExchange(Timeouts.NoResponse, exchange); } // ignore Timeout Exception
+            catch (Exception error)
+            {
+                Log($"Factory ressources open failed for player {playerId} :{error}", LogLevel.Error);
+                MessagePlayer(playerId, $"Factory ressources open failed {error}");
+            }
+        }
+
+
 
         private async Task FinishedFactory(int playerId)
         {

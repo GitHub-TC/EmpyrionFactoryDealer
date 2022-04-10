@@ -22,6 +22,7 @@ Resourcen.
 ## Konfiguration
 * LogLevel: Steuerung des Loggings
 * ChatCommandPrefix: Zeichenfolge mit dem die Chatkommandos beginnen müssen
+* UsePlayerAddItemForTransfer: Ressourcen direkt in das Playerinventar verschieben (Überladung möglich und Stackgröße ignorieren) oder per Austauschmenü (Stackgröße und Überladung berücksichtigen)
 * NameIdMappingFile: Für eine Namensauflösung der Ressourcen der Pfad zu der NameIdMapping.json z.B. aus dem EmpyrionScripting
 * CostsPerRemainingMinute: Credits pro Minute
 * RebuyCostPerUnit: Allgemeine Angabe der Credits pro Ressourceeneinheit
@@ -61,6 +62,7 @@ resources.
 ## Configuration
 * LogLevel: control the logging
 * ChatCommandPrefix: string the chat commands must start with
+* UsePlayerAddItemForTransfer: Move resources directly into player inventory (overload possible and stacksize exeeded) or via exchange menu (consider stack size and overload).
 * NameIdMappingFile: For a name resolution of the resources the path to the NameIdMapping.json e.g. from EmpyrionScripting.
 * CostsPerRemainingMinute: Credits per minute
 * RebuyCostPerUnit: General specification of the credits per resource unit
