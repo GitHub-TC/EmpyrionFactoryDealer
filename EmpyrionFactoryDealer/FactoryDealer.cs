@@ -2,15 +2,12 @@
 using EmpyrionNetAPIAccess;
 using EmpyrionNetAPIDefinitions;
 using EmpyrionNetAPITools;
-using EmpyrionNetAPITools.Extensions;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Numerics;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -21,6 +18,17 @@ namespace EmpyrionGalaxyNavigator
         public ModGameAPI GameAPI { get; set; }
 
         public ConfigurationManager<Configuration> Configuration { get; set; }
+
+        public class XChangeDialogState
+        {
+            public PlayerInfo P { get; set; }
+            public List<ItemStack> ItemStacks { get; set; }
+            public int ItemStacksCount { get; set; }
+            public Func<List<ItemStack>, List<ItemStack>, Task> TransferComplete { get; set; }
+            public bool FirstOpen { get; set; }
+        }
+
+        public ConcurrentDictionary<int, XChangeDialogState> PlayerXChangeDialogState { get; set; } = new ConcurrentDictionary<int, XChangeDialogState>();
 
         public IReadOnlyDictionary<string, int> BlockNameIdMapping
         {
@@ -52,6 +60,8 @@ namespace EmpyrionGalaxyNavigator
                 LoadConfiguration();
                 LogLevel = Configuration.Current.LogLevel;
                 ChatCommandManager.CommandPrefix = Configuration.Current.ChatCommandPrefix;
+
+                Event_Player_ItemExchange += ExecItemExchange;
 
                 ChatCommands.Add(new ChatCommand(@"factory help",   (I, A) => DisplayHelp           (I.playerId), "display help"));
                 ChatCommands.Add(new ChatCommand(@"factory finish", (I, A) => FinishedFactory       (I.playerId), "finish factory blueprint"));
@@ -194,41 +204,47 @@ namespace EmpyrionGalaxyNavigator
             var itemStacksCount = itemStacks.Count;
             Log($"***OpendFactoryXChange player:{P.playerName}[{P.entityId}/{P.steamId}] with used slots:{itemStacksCount}");
 
-            Action<ItemExchangeInfo> eventCallback = null;
-            bool? isBackpackOpenOkResult = null;
-            eventCallback = new Action<ItemExchangeInfo>(B =>
+            var newState = new XChangeDialogState
             {
-                if (P.entityId != B.id || !isBackpackOpenOkResult.HasValue) return;
+                P                = P,
+                ItemStacks       = itemStacks,
+                ItemStacksCount  = itemStacksCount,
+                TransferComplete = transferComplete,
+                FirstOpen        = true,
+            };
 
-                if (isBackpackOpenOkResult.Value)
-                {
-                    isBackpackOpenOkResult = false;
-                    return;
-                }
-
-                if (ItemStacksOk(itemStacks, B.items, out var errorMsg))
-                {
-                    Log($"***CloseFactoryXChange Player:{P.playerName}[{P.entityId}/{P.steamId}] with used slots:{itemStacksCount}->{B.items?.Length ?? 0}");
-                    if (itemStacksCount > 0 && (B.items?.Length ?? 0) == 0) Log($"***CloseFactoryXChange POSSIBLE ITEMS LOSS for player:{P.playerName}[{P.entityId}/{P.steamId}] with used slots:{itemStacksCount}->{B.items?.Length ?? 0} items:{JsonConvert.SerializeObject(itemStacks)}", LogLevel.Error);
-
-                    Event_Player_ItemExchange -= eventCallback;
-
-                    var remainingItemStacks = StackItems(B.items);
-                    transferComplete(itemStacks.Select(stack => new ItemStack { id = stack.id, count = stack.count - remainingItemStacks.FirstOrDefault(i => i.id == stack.id).count }).ToList(), remainingItemStacks).GetAwaiter().GetResult();
-                }
-                else
-                {
-                    Log($"***ReopendFactoryXChange Player:{P.playerName}[{P.entityId}/{P.steamId}] Slots:{B.items?.Length}");
-
-                    isBackpackOpenOkResult = true;
-                    OpenBackpackItemExcange(P.entityId, $"{errorMsg}", B.items).GetAwaiter().GetResult();
-                }
-            });
-
-            Event_Player_ItemExchange += eventCallback;
-            isBackpackOpenOkResult = true;
+            PlayerXChangeDialogState.AddOrUpdate(P.entityId, newState, (i, s) => newState);
 
             await OpenBackpackItemExcange(P.entityId, "", itemStacks.ToArray());
+        }
+
+        private void ExecItemExchange(ItemExchangeInfo B)
+        {
+            if (!PlayerXChangeDialogState.TryGetValue(B.id, out var state)) return;
+
+            if (state.FirstOpen)
+            {
+                state.FirstOpen = false;
+                return;
+            }
+
+            if (ItemStacksOk(state.ItemStacks, B.items, out var errorMsg))
+            {
+                Log($"***CloseFactoryXChange Player:{state.P.playerName}[{state.P.entityId}/{state.P.steamId}] with used slots:{state.ItemStacksCount}->{B.items?.Length ?? 0}");
+                if (state.ItemStacksCount > 0 && (B.items?.Length ?? 0) == 0) Log($"***CloseFactoryXChange POSSIBLE ITEMS LOSS for player:{state.P.playerName}[{state.P.entityId}/{state.P.steamId}] with used slots:{state.ItemStacksCount}->{B.items?.Length ?? 0} items:{JsonConvert.SerializeObject(state.ItemStacks)}", LogLevel.Error);
+
+                PlayerXChangeDialogState.TryRemove(B.id, out _);
+
+                var remainingItemStacks = StackItems(B.items);
+                state.TransferComplete(state.ItemStacks.Select(stack => new ItemStack { id = stack.id, count = stack.count - remainingItemStacks.FirstOrDefault(i => i.id == stack.id).count }).ToList(), remainingItemStacks).GetAwaiter().GetResult();
+            }
+            else
+            {
+                Log($"***ReopendFactoryXChange Player:{state.P.playerName}[{state.P.entityId}/{state.P.steamId}] Slots:{B.items?.Length}");
+                state.FirstOpen = true;
+
+                OpenBackpackItemExcange(state.P.entityId, $"{errorMsg}", B.items).GetAwaiter().GetResult();
+            }
         }
 
         private bool ItemStacksOk(IList<ItemStack> itemStacks, ItemStack[] items, out string errorMsg)
