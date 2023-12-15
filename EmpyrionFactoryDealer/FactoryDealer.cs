@@ -303,7 +303,7 @@ namespace EmpyrionGalaxyNavigator
                 buttonText = "close",
                 desc       = description,
                 id         = playerId,
-                items      = items ?? new ItemStack[] { },
+                items      = (items ?? new ItemStack[] { }).Concat(new ItemStack[7*7]).Take(7*7).ToArray(),
                 title      = "Factory ressources"
             };
 
@@ -361,7 +361,7 @@ namespace EmpyrionGalaxyNavigator
             if (P.bpResourcesInFactory?.Any() == true)
             {
                 info.Append("Rebuy ressources from factory costs [c][00ff00]");
-                info.Append(P.bpResourcesInFactory.Aggregate(0.0, (s, r) => r.Value * (Configuration.Current.Ressources.FirstOrDefault(res => res.Item == r.Key)?.RebuyCostPerUnit ?? Configuration.Current.RebuyCostPerUnit) + s));
+                info.Append((int)P.bpResourcesInFactory.Aggregate(0.0, (s, r) => r.Value * (Configuration.Current.Ressources.FirstOrDefault(res => res.Item == r.Key)?.RebuyCostPerUnit ?? Configuration.Current.RebuyCostPerUnit) + s));
                 info.AppendLine("[-][/c] credits");
 
                 info.Append("Extraction of the resources results in approx lost [c][00ff00]");
